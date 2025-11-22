@@ -185,8 +185,38 @@ app.get("/api/autocomplete", async (req, res) => {
   }
 });
 
+// Geocoding: convert full address → lat/lng
+app.get("/api/geocode", async (req, res) => {
+  const { address } = req.query;
+  if (!address) return res.status(400).json({ error: "address required" });
+
+  try {
+    const url = "https://maps.googleapis.com/maps/api/geocode/json";
+    const params = new URLSearchParams({
+      address,
+      key: GOOGLE_MAPS_API_KEY
+    });
+
+    const googleRes = await axios.get(`${url}?${params}`);
+    const result = googleRes.data.results?.[0];
+
+    if (!result) {
+      return res.status(404).json({ error: "No geocoding results found" });
+    }
+
+    const { lat, lng } = result.geometry.location;
+
+    return res.json({ lat, lng });
+  } catch (err) {
+    console.error("Geocoding error:", err.message);
+    return res.status(500).json({ error: "Geocoding failed" });
+  }
+});
+
+
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
 });
+ 
