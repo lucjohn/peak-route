@@ -1,24 +1,23 @@
 import express from "express";
 import dotenv from "dotenv";
 import axios from "axios";
+import cors from "cors";
 
 dotenv.config();
 
 const app = express();
 app.use(express.json());
+app.use(cors());
 
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+
 function formatTimeHHMM(isoTime) {
   if (!isoTime) return null;
-  const date = new Date(isoTime); // parse ISO string
-  
-  // Extract hours/minutes and pad with zeros
+  const date = new Date(isoTime);
   const hours = String(date.getHours()).padStart(2, "0");
   const minutes = String(date.getMinutes()).padStart(2, "0");
-
   return `${hours}:${minutes}`;
 }
-
 
 // helper: "lat,lng" -> {latitude, longitude}
 function parseLatLng(str) {
@@ -31,7 +30,30 @@ function parseLatLng(str) {
   return { latitude, longitude };
 }
 
-async function computeTransitRoutes(origin, destination) {
+// convert "HH:MM" → ISO datetime for *today* in server timezone
+function hhmmToIsoToday(hhmm) {
+  if (!hhmm) return null;
+
+  const match = hhmm.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null; // invalid format
+
+  const [_, hh, mm] = match;
+  const now = new Date();
+
+  const date = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    Number(hh),
+    Number(mm),
+    0,
+    0
+  );
+
+  return date.toISOString();
+}
+
+async function computeTransitRoutes(origin, destination, arrivalTimeHHMM) {
   if (!GOOGLE_MAPS_API_KEY) {
     throw new Error("GOOGLE_MAPS_API_KEY not set in environment");
   }
@@ -41,22 +63,19 @@ async function computeTransitRoutes(origin, destination) {
   const originLatLng = parseLatLng(origin);
   const destLatLng = parseLatLng(destination);
 
-  // Create body for POST request (Routes API)
+  // Convert HH:MM → ISO datetime
+  const arrivalTimeIso = hhmmToIsoToday(arrivalTimeHHMM);
+
+  // Build Google request body
   const body = {
-    origin: {
-      location: { latLng: originLatLng }
-    },
-    destination: {
-      location: { latLng: destLatLng }
-    },
+    origin: { location: { latLng: originLatLng } },
+    destination: { location: { latLng: destLatLng } },
     travelMode: "TRANSIT",
     computeAlternativeRoutes: true,
-    transitPreferences: {
-      allowedTravelModes: ["BUS"]
-    }
+    transitPreferences: { allowedTravelModes: ["BUS"] },
+    ...(arrivalTimeIso ? { arrivalTime: arrivalTimeIso } : {})
   };
 
-  // Field mask: only request needed fields
   const fieldMask = [
     "routes.duration",
     "routes.legs.steps.travelMode",
@@ -74,34 +93,31 @@ async function computeTransitRoutes(origin, destination) {
   const googleRoutes = res.data.routes || [];
 
   const mapped = googleRoutes.map(route => {
-    // total travel duration of entire route
     const durationSec = route.duration
       ? parseInt(route.duration.replace("s", ""), 10)
       : Number.POSITIVE_INFINITY;
 
-    const busNumbers = [];
-    let firstBusPickupArrivalTime = null; // first bus time at pickup stop
+    let busNumber = null;
+    let firstBusPickupArrivalTime = null;
+    
 
     (route.legs || []).forEach(leg => {
       (leg.steps || []).forEach(step => {
         const td = step.transitDetails;
         if (!td) return;
 
-        // Extract bus number(s)
-        if (td.transitLine) {
-          const shortName =
+        // Get first bus number only
+    
+        if (!busNumber && td.transitLine) {
+          busNumber =
             td.transitLine.nameShort ||
             td.transitLine.name ||
             null;
-
-          if (shortName && !busNumbers.includes(shortName)) {
-            if (busNumbers.length === 0) busNumbers.push(shortName);
-
-          }
         }
 
-        // FIRST transit step => pickup stop bus arrival/departure time
+        
         if (!firstBusPickupArrivalTime && td.stopDetails?.departureTime) {
+          
           firstBusPickupArrivalTime = td.stopDetails.departureTime;
         }
       });
@@ -109,44 +125,32 @@ async function computeTransitRoutes(origin, destination) {
 
     return {
       durationSec,
-      busNumbers,
+      busNumber,
       pickupArrivalTime: firstBusPickupArrivalTime
     };
   });
 
-  // sort fastest first
   mapped.sort((a, b) => a.durationSec - b.durationSec);
-
   return mapped;
 }
 
-// GET /api/routes?origin=lat,lng&destination=lat,lng&buses=1,2
+// GET /api/routes?origin=lat,lng&destination=lat,lng&arrivalTime=HH:MM
 app.get("/api/routes", async (req, res) => {
-  const { origin, destination, buses } = req.query;
+  const { origin, destination, arrivalTime } = req.query;
+
   if (!origin || !destination) {
     return res.status(400).json({ error: "origin and destination required" });
   }
 
   try {
-    const routes = await computeTransitRoutes(origin, destination);
+    const routes = await computeTransitRoutes(origin, destination, arrivalTime);
 
-    // optional filter by bus numbers
-    let filtered = routes;
-    if (buses) {
-      const wanted = buses.split(",").map(s => s.trim());
-      filtered = routes.filter(r =>
-        r.busNumbers.some(bn => wanted.includes(String(bn)))
-      );
-    }
+    // only routes with actual bus
+    const busRoutes = routes.filter(r => r.busNumber);
 
-    // keep only routes that actually have buses
-    const busOnly = filtered.filter(r => r.busNumbers.length > 0);
-
-    // top 3 fastest bus routes with pickup arrival time
-    const top3 = busOnly.slice(0, 3).map(r => ({
-      durationSec: r.durationSec,
+    const top3 = busRoutes.slice(0, 3).map(r => ({
       durationMin: Math.round(r.durationSec / 60),
-      busNumbers: r.busNumbers,
+      busNumber: r.busNumber,
       pickupArrivalTime: formatTimeHHMM(r.pickupArrivalTime)
     }));
 
@@ -157,7 +161,32 @@ app.get("/api/routes", async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3000;
+app.get("/api/autocomplete", async (req, res) => {
+  const { input } = req.query;
+  if (!input) return res.status(400).json({ error: "input required" });
+
+  try {
+    const url =
+      "https://maps.googleapis.com/maps/api/place/autocomplete/json";
+
+    const params = new URLSearchParams({
+      input,
+      key: GOOGLE_MAPS_API_KEY,
+      components: "country:ca", // Optional: limit to Canada
+      types: "geocode"          // addresses & places
+    });
+
+    const response = await axios.get(`${url}?${params}`);
+
+    res.json(response.data);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "autocomplete failed" });
+  }
+});
+
+
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
 });
