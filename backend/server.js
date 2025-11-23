@@ -130,7 +130,7 @@ async function computeTransitRoutes(origin, destination, arrivalTimeHHMM) {
     };
   });
 
-  mapped.sort((a, b) => a.durationSec - b.durationSec);
+  mapped.reverse((a, b) => a.pickupArrivalTime - b.pickupArrivalTime);
   return mapped;
 }
 
