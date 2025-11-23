@@ -17,6 +17,7 @@ export function AddressInput({ value, onChange, placeholder, type }: AddressInpu
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const isSelectingRef = useRef(false); // Track when user is selecting from dropdown
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -30,6 +31,12 @@ export function AddressInput({ value, onChange, placeholder, type }: AddressInpu
   }, []);
 
   useEffect(() => {
+    // Skip autocomplete if we're in the middle of selecting a suggestion
+    if (isSelectingRef.current) {
+      isSelectingRef.current = false;
+      return;
+    }
+
     const timer = setTimeout(async () => {
       if (value.length > 2) {
         try {
@@ -50,6 +57,7 @@ export function AddressInput({ value, onChange, placeholder, type }: AddressInpu
   }, [value]);
 
   const handleSelectSuggestion = (suggestion: string) => {
+    isSelectingRef.current = true; // Set flag before updating value
     onChange(suggestion);
     setShowSuggestions(false);
     setSuggestions([]);
