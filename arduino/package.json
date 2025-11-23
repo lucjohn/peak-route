@@ -1,0 +1,17 @@
+{
+  "name": "peak-route-arduino",
+  "version": "1.0.0",
+  "description": "Arduino integration for Peak Route display",
+  "main": "send_routes.js",
+  "scripts": {
+    "send": "node send_routes.js",
+    "watch": "node send_routes.js --watch",
+    "send-com10": "$env:ARDUINO_PORT='COM10'; node send_routes.js",
+    "watch-com10": "$env:ARDUINO_PORT='COM10'; node send_routes.js --watch"
+  },
+  "dependencies": {
+    "serialport": "^12.0.0",
+    "@serialport/parser-readline": "^12.0.0"
+  }
+}
+

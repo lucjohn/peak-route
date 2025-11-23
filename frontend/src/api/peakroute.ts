@@ -10,7 +10,7 @@ export async function geocodeAddress(address: string): Promise<GeocodeResult> {
   }
 
   const res = await fetch(
-    `/api/geocode?address=${encodeURIComponent(address)}`
+    `${API_BASE_URL}/api/geocode?address=${encodeURIComponent(address)}`
   );
 
   if (!res.ok) {

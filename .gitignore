@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+build/
+*.log
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated route files (if these are temporary/generated)
+backend/routes/*.json
+
+# Lock files (optional - some teams commit these, some don't)
+# Uncomment if you don't want to commit lock files:
+# package-lock.json
+# yarn.lock
+# bun.lockb
+

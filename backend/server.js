@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import axios from "axios";
 import cors from "cors"
 import fs from "node:fs/promises";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -286,42 +287,55 @@ async function computeTransitRoutes(origin, destination, arrivalTimeHHMM) {
 
 // GET /api/routes?origin=lat,lng&destination=lat,lng&arrivalTime=HH:MM
 app.get("/api/routes", async (req, res) => {
+  console.log("=== /api/routes REQUEST RECEIVED ===");
   const { origin, destination, arrivalTime } = req.query;
+  console.log("Query params:", { origin, destination, arrivalTime });
 
   if (!origin || !destination) {
     return res.status(400).json({ error: "origin and destination required" });
   }
 
   try {
+    console.log("Calling computeTransitRoutes...");
     const routes = await computeTransitRoutes(origin, destination, arrivalTime);
+    console.log(`Got ${routes.length} routes from computeTransitRoutes`);
 
     // only routes with actual bus
     const busRoutes = routes.filter(r => r.busNumber);
+    console.log(`Filtered to ${busRoutes.length} bus routes`);
 
     const top3 = busRoutes.slice(0, 3).map(r => ({
       busNumber: r.busNumber,
       pickupArrivalTime: formatTimeHHMM(r.pickupArrivalTime)
     }));
     
-    // Resolve this file's directory (backend/)
+    // Save routes to file - using synchronous methods for reliability
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
-
-    // Target folder: backend/routes
-    const saveFolder = path.join(__dirname, "routes");
-
-    // Build file path inside same folder
+    const routesDir = path.join(__dirname, "routes");
+    
+    // Create directory if it doesn't exist (synchronous)
+    if (!existsSync(routesDir)) {
+      mkdirSync(routesDir, { recursive: true });
+    }
+    
+    // Create filename with timestamp
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const filePath = path.join(saveFolder, `routes_${timestamp}.json`);
-    const filePayload = {
+    const filename = `routes_${timestamp}.json`;
+    const filePath = path.join(routesDir, filename);
+    
+    // Prepare data to save
+    const dataToSave = {
       origin,
       destination,
       arrivalTime: arrivalTime || null,
       generatedAt: new Date().toISOString(),
       routes: top3
     };
-
-    await fs.writeFile(filePath, JSON.stringify(filePayload, null, 2), "utf8");
+    
+    // Write file synchronously
+    writeFileSync(filePath, JSON.stringify(dataToSave, null, 2), "utf8");
+    console.log(`[ROUTES SAVED] ${filePath}`);
 
     return res.json({ count: top3.length, routes: top3 });
   } catch (err) {
