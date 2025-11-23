@@ -22,7 +22,7 @@ export function RouteCard({ route, index, isFastest }: RouteCardProps) {
           </h3>
           {isFastest && (
             <Badge className="mt-2 bg-transit-accent text-accent-foreground hover:bg-transit-accent/90">
-              Fastest
+              Earliest
             </Badge>
           )}
         </div>
