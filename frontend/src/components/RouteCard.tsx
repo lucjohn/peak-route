@@ -12,50 +12,37 @@ interface RouteCardProps {
 export function RouteCard({ route, index, isFastest }: RouteCardProps) {
   return (
     <Card
-      className="p-6 hover:shadow-elevated transition-shadow duration-300 animate-fade-in border-border bg-card"
+      className="p-8 pt-5 hover:shadow-elevated transition-shadow duration-300 animate-fade-in border-border bg-card text-2xl"
       style={{ animationDelay: `${index * 100}ms` }}
     >
-      <div className="flex items-start justify-between mb-4">
+      <div className="flex items-center justify-between relative">
         <div>
-          <h3 className="text-lg font-semibold text-foreground">
+          <h3 className="text-xl font-semibold text-foreground">
             Route {index + 1}
           </h3>
           {isFastest && (
-            <Badge className="mt-2 bg-transit-accent text-accent-foreground hover:bg-transit-accent/90">
+            <Badge className="bg-transit-accent text-accent-foreground hover:bg-transit-accent/90 px-3 py-1 text-lg my-3">
               Earliest
             </Badge>
           )}
         </div>
         <div className="text-right">
-          <div className="text-2xl font-bold text-transit">
-            {route.durationMin}
+          <div className="text-5xl mt-12 font-bold text-transit">
+            {route.pickupArrivalTime}
           </div>
-          <div className="text-sm text-muted-foreground">minutes</div>
         </div>
       </div>
 
-      <div className="space-y-3">
-        <div className="flex items-center gap-3 text-sm">
-          <Bus className="h-4 w-4 text-transit flex-shrink-0" />
+      <div className="space-y-4">
+        <div className="flex items-center gap-4 text-base">
+          <Bus className="h-6 w-6 text-transit flex-shrink-0" />
           <div>
-            <div className="text-muted-foreground">Bus Number</div>
-            <div className="font-medium text-foreground">
+            <div className="text-muted-foreground text-sm">Bus Number</div>
+            <div className="font-medium text-foreground text-lg">
               {route.busNumber ?? "Direct route"}
             </div>
           </div>
         </div>
-
-        {route.pickupArrivalTime && (
-          <div className="flex items-center gap-3 text-sm">
-            <Clock className="h-4 w-4 text-transit flex-shrink-0" />
-            <div>
-              <div className="text-muted-foreground">Pickup Time</div>
-              <div className="font-medium text-foreground">
-                {route.pickupArrivalTime}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </Card>
   );
