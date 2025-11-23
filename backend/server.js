@@ -1,7 +1,10 @@
 import express from "express";
 import dotenv from "dotenv";
 import axios from "axios";
-import cors from "cors";
+import cors from "cors"
+import fs from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 dotenv.config();
 
@@ -299,6 +302,26 @@ app.get("/api/routes", async (req, res) => {
       busNumber: r.busNumber,
       pickupArrivalTime: formatTimeHHMM(r.pickupArrivalTime)
     }));
+    
+    // Resolve this file's directory (backend/)
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+
+    // Target folder: backend/routes
+    const saveFolder = path.join(__dirname, "routes");
+
+    // Build file path inside same folder
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const filePath = path.join(saveFolder, `routes_${timestamp}.json`);
+    const filePayload = {
+      origin,
+      destination,
+      arrivalTime: arrivalTime || null,
+      generatedAt: new Date().toISOString(),
+      routes: top3
+    };
+
+    await fs.writeFile(filePath, JSON.stringify(filePayload, null, 2), "utf8");
 
     return res.json({ count: top3.length, routes: top3 });
   } catch (err) {
